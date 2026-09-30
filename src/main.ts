@@ -3,8 +3,8 @@ import './assets/main.css'
 import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from '@/App.vue'
-import Deck from "@/Deck.vue";
-import Home from "@/Home.vue";
+import Deck from "@/views/Deck.vue";
+import Home from "@/views/Home.vue";
 
 const router = createRouter({
     history: createWebHistory(),
