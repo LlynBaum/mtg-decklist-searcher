@@ -1,11 +1,21 @@
 <script setup lang="ts">
   import {ref} from "vue";
+  import {useRouter} from "vue-router";
 
   const url = ref("");
+  const router = useRouter();
 
-  function loadDeck() {
-    // TODO: parse url and get ID
-    // TODO: route to new view and load deck list
+  async function loadDeck() {
+    let deckId = url.value;
+    if (deckId.includes("moxfield.com")) {
+      const split = deckId.split("/");
+      deckId = split[split.length - 1]!;
+    }
+
+    await router.push({
+      name: "deck",
+      params: { deckId: deckId }
+    });
   }
 </script>
 
