@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { DeckCard } from '@/types/mtg';
 
 const props = defineProps<{
@@ -19,6 +19,10 @@ const currentImageUrl = computed(() => {
     return props.card.backImageUrl;
   }
   return props.card.imageUrl;
+});
+
+watch(currentImageUrl, () => {
+  imageError.value = false;
 });
 
 const formattedEur = computed(() => {

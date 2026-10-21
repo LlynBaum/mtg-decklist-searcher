@@ -12,6 +12,7 @@ export interface ScryfallImageUris {
 
 export interface ScryfallCardFace {
   name: string;
+  oracle_id?: string;
   mana_cost?: string;
   type_line?: string;
   oracle_text?: string;
@@ -204,9 +205,10 @@ export async function enrichDeckCardsWithScryfall(cards: DeckCard[]): Promise<vo
         const { eurPrice, usdPrice } = extractPricesFromScryfallCard(scryCard);
         const images = extractImagesFromScryfallCard(scryCard);
         const setMeta = setsMap.get(scryCard.set.toLowerCase());
+        const resolvedOracleId = scryCard.oracle_id ?? scryCard.card_faces?.[0]?.oracle_id;
 
         for (const deckCard of matchingDeckCards) {
-          deckCard.oracleId = scryCard.oracle_id;
+          deckCard.oracleId = resolvedOracleId;
           deckCard.typeLine = scryCard.type_line ?? deckCard.typeLine;
           deckCard.manaCost = scryCard.mana_cost ?? deckCard.manaCost;
           if (eurPrice !== null) deckCard.eurPrice = eurPrice;
@@ -223,14 +225,36 @@ export async function enrichDeckCardsWithScryfall(cards: DeckCard[]): Promise<vo
 
           // Update initial set entry
           const setCode = scryCard.set.toLowerCase();
-          if (!deckCard.sets.some((s) => s.setCode === setCode)) {
-            deckCard.sets.push({
-              setCode,
-              setName: scryCard.set_name,
-              releasedAt: setMeta?.released_at ?? scryCard.released_at,
-              iconSvgUri: setMeta?.icon_svg_uri,
-              setType: setMeta?.set_type ?? scryCard.set_type,
-            });
+          const existingSetEntry = deckCard.sets.find((s) => s.setCode === setCode);
+          if (!existingSetEntry) {
+            deckCard.sets = [
+              ...deckCard.sets,
+              {
+                setCode,
+                setName: scryCard.set_name,
+                releasedAt: setMeta?.released_at ?? scryCard.released_at,
+                iconSvgUri: setMeta?.icon_svg_uri,
+                setType: setMeta?.set_type ?? scryCard.set_type,
+                scryfallId: scryCard.id,
+                imageUrl: scryCard.lang === 'en' ? images.imageUrl : undefined,
+                backImageUrl: scryCard.lang === 'en' ? images.backImageUrl : undefined,
+                eurPrice,
+                usdPrice,
+                rarity: scryCard.rarity,
+              },
+            ];
+          } else {
+            existingSetEntry.releasedAt =
+              existingSetEntry.releasedAt ?? setMeta?.released_at ?? scryCard.released_at;
+            existingSetEntry.iconSvgUri = existingSetEntry.iconSvgUri ?? setMeta?.icon_svg_uri;
+            existingSetEntry.setType =
+              existingSetEntry.setType ?? setMeta?.set_type ?? scryCard.set_type;
+            if (scryCard.lang === 'en') {
+              existingSetEntry.imageUrl = images.imageUrl;
+              existingSetEntry.backImageUrl = images.backImageUrl;
+            }
+            if (eurPrice !== null) existingSetEntry.eurPrice = eurPrice;
+            if (usdPrice !== null) existingSetEntry.usdPrice = usdPrice;
           }
         }
       }
@@ -269,11 +293,12 @@ export async function enrichDeckCardsWithScryfall(cards: DeckCard[]): Promise<vo
           uniqueByName.get(norm) ?? uniqueByName.get(frontNorm) ?? [];
         const images = extractImagesFromScryfallCard(scryCard);
         const { eurPrice, usdPrice } = extractPricesFromScryfallCard(scryCard);
+        const resolvedOracleId = scryCard.oracle_id ?? scryCard.card_faces?.[0]?.oracle_id;
 
         for (const deckCard of matching) {
           deckCard.imageUrl = images.imageUrl;
           deckCard.backImageUrl = images.backImageUrl;
-          if (!deckCard.oracleId) deckCard.oracleId = scryCard.oracle_id;
+          if (!deckCard.oracleId) deckCard.oracleId = resolvedOracleId;
           if (deckCard.eurPrice === null && eurPrice !== null) deckCard.eurPrice = eurPrice;
           if (deckCard.usdPrice === null && usdPrice !== null) deckCard.usdPrice = usdPrice;
         }
@@ -294,7 +319,7 @@ export async function fetchAllSetPrintingsForCards(
 ): Promise<void> {
   const setsMap = await fetchScryfallSetsMap();
 
-  // Group cards by oracleId (or normalizedName fallback)
+  // Group cards by oracleId
   const oracleToCards = new Map<string, DeckCard[]>();
   const uncachedOracleIds: string[] = [];
 
@@ -332,7 +357,7 @@ export async function fetchAllSetPrintingsForCards(
     }
   }
 
-  const BATCH_SIZE = 18;
+  const BATCH_SIZE = 10;
   const batches: string[][] = [];
   for (let i = 0; i < nonBasicOracleIds.length; i += BATCH_SIZE) {
     batches.push(nonBasicOracleIds.slice(i, i + BATCH_SIZE));
@@ -361,7 +386,7 @@ export async function fetchAllSetPrintingsForCards(
     }
 
     let pageCount = 0;
-    const MAX_PAGES_PER_BATCH = 4;
+    const MAX_PAGES_PER_BATCH = 12;
 
     while (nextUrl && pageCount < MAX_PAGES_PER_BATCH) {
       pageCount++;
@@ -372,7 +397,7 @@ export async function fetchAllSetPrintingsForCards(
         const list = (await res.json()) as ScryfallListResponse<ScryfallCard>;
 
         for (const printCard of list.data) {
-          const oid = printCard.oracle_id;
+          const oid = printCard.oracle_id ?? printCard.card_faces?.[0]?.oracle_id;
           if (!oid) continue;
           const setCode = printCard.set.toLowerCase();
           const setMeta = setsMap.get(setCode);
@@ -389,19 +414,39 @@ export async function fetchAllSetPrintingsForCards(
             printsByOracle.set(oid, oracleMap);
           }
 
-          if (!oracleMap.has(setCode)) {
+          const printImages = extractImagesFromScryfallCard(printCard);
+          const { eurPrice, usdPrice } = extractPricesFromScryfallCard(printCard);
+
+          const existingSetPrint = oracleMap.get(setCode);
+          if (!existingSetPrint) {
             oracleMap.set(setCode, {
               setCode,
               setName: setMeta?.name ?? printCard.set_name,
               releasedAt: setMeta?.released_at ?? printCard.released_at,
               iconSvgUri: setMeta?.icon_svg_uri,
               setType,
+              scryfallId: printCard.id,
+              imageUrl: printImages.imageUrl,
+              backImageUrl: printImages.backImageUrl,
+              eurPrice,
+              usdPrice,
+              rarity: printCard.rarity,
             });
+          } else {
+            if (!existingSetPrint.imageUrl && printImages.imageUrl) {
+              existingSetPrint.imageUrl = printImages.imageUrl;
+              existingSetPrint.backImageUrl = printImages.backImageUrl;
+            }
+            if (existingSetPrint.eurPrice == null && eurPrice !== null) {
+              existingSetPrint.eurPrice = eurPrice;
+            }
+            if (existingSetPrint.usdPrice == null && usdPrice !== null) {
+              existingSetPrint.usdPrice = usdPrice;
+            }
           }
 
           // Also backfill price if any deck card for this oracleId was missing EUR/USD price
           const deckCards = oracleToCards.get(oid) ?? [];
-          const { eurPrice, usdPrice } = extractPricesFromScryfallCard(printCard);
           for (const dc of deckCards) {
             if (dc.eurPrice === null && eurPrice !== null) dc.eurPrice = eurPrice;
             if (dc.usdPrice === null && usdPrice !== null) dc.usdPrice = usdPrice;
@@ -431,12 +476,28 @@ export async function fetchAllSetPrintingsForCards(
 }
 
 function mergeSetsIntoCard(card: DeckCard, newSets: SetPrintingInfo[]): void {
-  const existingCodes = new Set(card.sets.map((s) => s.setCode.toLowerCase()));
+  const existingMap = new Map(card.sets.map((s) => [s.setCode.toLowerCase(), { ...s }]));
   for (const s of newSets) {
     const code = s.setCode.toLowerCase();
-    if (!existingCodes.has(code)) {
-      card.sets.push(s);
-      existingCodes.add(code);
+    const existing = existingMap.get(code);
+    if (!existing) {
+      existingMap.set(code, { ...s });
+    } else {
+      existingMap.set(code, {
+        ...existing,
+        iconSvgUri: existing.iconSvgUri ?? s.iconSvgUri,
+        releasedAt: existing.releasedAt ?? s.releasedAt,
+        setType: existing.setType ?? s.setType,
+        scryfallId: s.scryfallId ?? existing.scryfallId,
+        imageUrl: s.imageUrl ?? existing.imageUrl,
+        backImageUrl: s.backImageUrl ?? existing.backImageUrl,
+        eurPrice:
+          s.eurPrice !== undefined && s.eurPrice !== null ? s.eurPrice : existing.eurPrice,
+        usdPrice:
+          s.usdPrice !== undefined && s.usdPrice !== null ? s.usdPrice : existing.usdPrice,
+        rarity: s.rarity ?? existing.rarity,
+      });
     }
   }
+  card.sets = Array.from(existingMap.values());
 }

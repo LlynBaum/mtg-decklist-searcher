@@ -52,6 +52,10 @@ function mapBoardCardToDeckCard(boardCard: BoardCardType, boardKey: BoardKey): D
     BASIC_LAND_NAMES.has(normalizedName) ||
     Boolean(c.type_line && c.type_line.toLowerCase().includes('basic land'));
 
+  const eurPrice = c.prices?.eur ?? c.prices?.eur_foil ?? null;
+  const usdPrice = c.prices?.usd ?? c.prices?.usd_foil ?? c.prices?.usd_etched ?? null;
+  const fallbackImage = getScryfallFallbackImageUrl(c.scryfall_id);
+
   const initialSets: SetPrintingInfo[] = [];
   const mainSetCode = c.set.toLowerCase();
   initialSets.push({
@@ -59,22 +63,30 @@ function mapBoardCardToDeckCard(boardCard: BoardCardType, boardKey: BoardKey): D
     setName: c.set_name,
     releasedAt: c.released_at ? c.released_at.toISOString().slice(0, 10) : undefined,
     setType: c.set_type ?? undefined,
+    scryfallId: c.scryfall_id,
+    imageUrl: fallbackImage,
+    eurPrice,
+    usdPrice,
+    rarity: c.rarity,
   });
 
   if (boardCard.printingData) {
     for (const print of boardCard.printingData) {
       const pCode = print.set.toLowerCase();
       if (!initialSets.some((s) => s.setCode === pCode)) {
+        const pScryfallId = print.card?.scryfall_id;
         initialSets.push({
           setCode: pCode,
           setName: print.set_name,
+          scryfallId: pScryfallId,
+          imageUrl: pScryfallId ? getScryfallFallbackImageUrl(pScryfallId) : undefined,
+          eurPrice: print.prices?.eur ?? print.prices?.eur_foil ?? null,
+          usdPrice: print.prices?.usd ?? print.prices?.usd_foil ?? print.prices?.usd_etched ?? null,
+          rarity: print.rarity,
         });
       }
     }
   }
-
-  const eurPrice = c.prices?.eur ?? c.prices?.eur_foil ?? null;
-  const usdPrice = c.prices?.usd ?? c.prices?.usd_foil ?? c.prices?.usd_etched ?? null;
 
   return {
     id: `${boardKey}:${c.id}:${c.scryfall_id}`,

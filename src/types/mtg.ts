@@ -10,6 +10,12 @@ export interface SetPrintingInfo {
   releasedAt?: string;
   iconSvgUri?: string;
   setType?: string;
+  scryfallId?: string;
+  imageUrl?: string;
+  backImageUrl?: string;
+  eurPrice?: number | null;
+  usdPrice?: number | null;
+  rarity?: string;
 }
 
 export interface DeckCard {

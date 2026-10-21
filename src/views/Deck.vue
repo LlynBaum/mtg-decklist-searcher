@@ -175,7 +175,25 @@ const setGroups = computed<DeckSetGroup[]>(() => {
       }
 
       if (!group.cards.some((existing) => existing.normalizedName === card.normalizedName)) {
-        group.cards.push(card);
+        const setSpecificCard: DeckCard = {
+          ...card,
+          id: `${code}:${card.id}`,
+          scryfallId: setInfo.scryfallId ?? card.scryfallId,
+          setCode: code,
+          setName: setInfo.setName,
+          imageUrl: setInfo.imageUrl || card.imageUrl,
+          backImageUrl: setInfo.imageUrl ? setInfo.backImageUrl : card.backImageUrl,
+          eurPrice:
+            setInfo.eurPrice !== undefined && setInfo.eurPrice !== null
+              ? setInfo.eurPrice
+              : card.eurPrice,
+          usdPrice:
+            setInfo.usdPrice !== undefined && setInfo.usdPrice !== null
+              ? setInfo.usdPrice
+              : card.usdPrice,
+          rarity: setInfo.rarity ?? card.rarity,
+        };
+        group.cards.push(setSpecificCard);
       }
     }
   }
@@ -216,11 +234,12 @@ async function loadDeckData(id: string) {
     deck.value = loaded;
     isLoadingDeck.value = false;
 
+    const reactiveDeck = deck.value;
     const allCards: DeckCard[] = [
-      ...loaded.boards.commanders,
-      ...loaded.boards.mainboard,
-      ...loaded.boards.sideboard,
-      ...loaded.boards.maybeboard,
+      ...reactiveDeck.boards.commanders,
+      ...reactiveDeck.boards.mainboard,
+      ...reactiveDeck.boards.sideboard,
+      ...reactiveDeck.boards.maybeboard,
     ];
 
     // Step 1: Enrich with Scryfall English images, prices, and oracle_ids
