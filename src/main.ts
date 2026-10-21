@@ -1,3 +1,4 @@
+import './services/setupFetchProxy'
 import './assets/main.css'
 
 import { createApp } from 'vue'

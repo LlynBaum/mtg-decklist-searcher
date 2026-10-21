@@ -13,6 +13,22 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      'moxfield-api': fileURLToPath(
+        new URL('./node_modules/moxfield-api/dist/moxfield-api.mjs', import.meta.url)
+      ),
+    },
+  },
+  server: {
+    proxy: {
+      '/api/moxfield': {
+        target: 'https://api2.moxfield.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/moxfield/, ''),
+        headers: {
+          Origin: 'https://www.moxfield.com',
+          Referer: 'https://www.moxfield.com/',
+        },
+      },
     },
   },
 })
